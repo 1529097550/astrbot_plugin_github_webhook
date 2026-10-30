@@ -1,29 +1,17 @@
 """AstrBot GitHub Webhook Plugin - Entry point."""
 
-import asyncio
-import json
-import sys
-from pathlib import Path
-
-from aiohttp import web
-
-from astrbot.api import AstrBotConfig, logger
-from astrbot.api import all as api
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star, register
 
-# 将 src/ 添加到 sys.path，使 Python 能找到模块
-sys.path.insert(0, str(Path(__file__).parent))
-
-from src.core.plugin import GitHubWebhookPlugin
+# Keep internal modules inside AstrBot's plugin namespace, including on reload.
+from .src.core.plugin import GitHubWebhookPlugin
 
 
 @register(
     "astrbot_plugin_github_webhook",
     "TatsukiMengChen",
     "GitHub Webhook 集成插件 - 接收 GitHub 事件并转发到聊天平台",
-    "0.5.0",
+    "0.4.2",
 )
 class PluginEntry(Star):
     """插件入口类，代理到实际的 GitHubWebhookPlugin 类"""
