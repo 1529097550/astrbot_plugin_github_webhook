@@ -57,6 +57,8 @@ class GitHubWebhookPlugin(Star):
     async def handle_webhook(self, request: web.Request):
         event_type = request.headers.get("X-GitHub-Event", "unknown")
         signature = request.headers.get("X-Hub-Signature-256", "")
+        # 尽早记录事件类型，确保限流、读取或解析失败时也能追踪请求来源。
+        logger.info(f"GitHub Webhook: Received event type: {event_type}")
 
         # Rate limiting check
         if self.rate_limiter:
@@ -78,24 +80,44 @@ class GitHubWebhookPlugin(Star):
                     },
                 )
 
-        # Read payload
+        # 读取和解析分开处理，便于日志准确区分请求读取失败与数据格式错误。
         try:
             payload_bytes = await request.read()
+        except Exception as e:
+            logger.error(
+                "GitHub Webhook: Failed to read request body for event "
+                f"'{event_type}': {type(e).__name__}: {e}"
+            )
+            return web.Response(status=400, text="Failed to read request")
+
+        try:
             data = json.loads(payload_bytes.decode("utf-8"))
+        except UnicodeDecodeError as e:
+            # 请求体不是合法 UTF-8 时，记录具体的解码原因。
+            logger.error(
+                "GitHub Webhook: Failed to decode payload for event "
+                f"'{event_type}': {type(e).__name__}: {e}"
+            )
+            return web.Response(status=400, text="Invalid UTF-8 payload")
         except json.JSONDecodeError as e:
-            logger.error(f"GitHub Webhook: Failed to parse JSON: {e}")
+            # JSON 语法错误附带行列位置，方便定位 GitHub payload 问题。
+            logger.error(
+                "GitHub Webhook: Failed to parse JSON for event "
+                f"'{event_type}': {e.msg} (line {e.lineno}, column {e.colno})"
+            )
             return web.Response(status=400, text="Invalid JSON")
         except Exception as e:
-            logger.error(f"GitHub Webhook: Failed to read request body: {e}")
-            return web.Response(status=400, text="Failed to read request")
+            logger.error(
+                "GitHub Webhook: Failed to parse payload for event "
+                f"'{event_type}': {type(e).__name__}: {e}"
+            )
+            return web.Response(status=400, text="Invalid payload")
 
         # Signature verification
         if self.cfg.webhook_secret and signature:
             if not verify_signature(payload_bytes, signature, self.cfg.webhook_secret):
                 logger.warning("GitHub Webhook: Invalid signature - request rejected")
                 return web.Response(status=401, text="Invalid signature")
-
-        logger.info(f"GitHub Webhook: Received event type: {event_type}")
 
         if event_type == "ping":
             return web.Response(text="Pong")
@@ -120,7 +142,11 @@ class GitHubWebhookPlugin(Star):
             elif event_type == "repository":
                 message = await handle_repository_event(data, self.context)
             else:
-                logger.info(f"GitHub Webhook: Event type '{event_type}' not handled")
+                # 暂未支持的事件仍返回成功，但明确记录没有对应处理器。
+                logger.warning(
+                    "GitHub Webhook: No handler registered for event type "
+                    f"'{event_type}' (event not handled)"
+                )
         except Exception as e:
             logger.error(f"GitHub Webhook: Error processing event: {e}", exc_info=True)
             return web.Response(status=500, text="Internal server error")
