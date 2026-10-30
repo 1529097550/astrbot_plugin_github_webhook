@@ -1,5 +1,6 @@
 """GitHub Webhook Plugin core implementation."""
 
+import asyncio
 import json
 from aiohttp import web
 
@@ -31,7 +32,7 @@ class GitHubWebhookPlugin(Star):
         self.site = None
         self.cfg = PluginConfig(config)
         self.issue_notifier = IssueNotifier(self)
-        self.last_source_repo = None
+        self.source_repos: dict[str, None] = {}
         self.github_api = GitHubAPI(self.cfg.github_token)
 
         if self.cfg.rate_limit > 0:
@@ -122,11 +123,11 @@ class GitHubWebhookPlugin(Star):
         if event_type == "ping":
             return web.Response(text="Pong")
 
-        # Remember source repository for the /github_forks command
+        # Remember source repositories for the /github_forks command
         if isinstance(data, dict):
             repo_full_name = data.get("repository", {}).get("full_name")
             if repo_full_name:
-                self.last_source_repo = repo_full_name
+                self.source_repos.setdefault(repo_full_name, None)
 
         message = None
 
@@ -189,22 +190,22 @@ class GitHubWebhookPlugin(Star):
             logger.error(f"GitHub Webhook: Error details: {str(e)}")
 
     async def query_forks(self, event):
-        """Handler for the /github_forks command: query total fork count."""
-        repo = self.last_source_repo
-        if not repo:
+        """Handler for the /github_forks command: list all tracked repos with fork counts."""
+        if not self.source_repos:
             return event.plain_result(
                 "GitHub Webhook: 尚未收到 GitHub 事件，无法确定要查询的仓库"
             )
 
-        info = await self.github_api.get_repo(repo)
-        if info is None:
-            return event.plain_result(
-                f"GitHub Webhook: 查询失败，仓库 {repo} 不存在或 API 请求受限"
-            )
+        async def _forks(repo: str) -> str:
+            info = await self.github_api.get_repo(repo)
+            forks = info.get("forks_count", "?") if info else "?"
+            return f"🍴 {repo}: {forks} forks"
 
-        forks = info.get("forks_count", 0)
+        lines = await asyncio.gather(
+            *(_forks(repo) for repo in self.source_repos)
+        )
         return event.plain_result(
-            f"📊 GitHub Fork Stats\n🍴 Repo: {repo}\n📈 Total forks: {forks}"
+            "📊 GitHub Fork Stats\n" + "\n".join(lines)
         )
 
     async def terminate(self):

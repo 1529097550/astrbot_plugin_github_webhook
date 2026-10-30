@@ -34,5 +34,5 @@ class PluginEntry(Star):
 
     @filter.command("github_forks")
     async def github_forks(self, event: AstrMessageEvent):
-        """查询 GitHub 仓库的总 Fork 数"""
+        """查询所有收到过 Webhook 事件的仓库及其 Fork 数"""
         yield await self._plugin.query_forks(event)
