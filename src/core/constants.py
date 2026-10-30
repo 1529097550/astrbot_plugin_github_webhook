@@ -14,6 +14,7 @@ EVENT_TYPE_PUSH = "push"
 EVENT_TYPE_ISSUES = "issues"
 EVENT_TYPE_PULL_REQUEST = "pull_request"
 EVENT_TYPE_FORK = "fork"
+EVENT_TYPE_REPOSITORY = "repository"
 EVENT_TYPE_PING = "ping"
 
 # Issue actions

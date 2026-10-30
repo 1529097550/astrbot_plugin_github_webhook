@@ -14,6 +14,7 @@ from ..handlers.fork_handler import handle_fork_event
 from ..handlers.issues_handler import handle_issues_event
 from ..handlers.pull_request_handler import handle_pull_request_event
 from ..handlers.push_handler import handle_push_event
+from ..handlers.repository_handler import handle_repository_event
 from ..services.github_api import GitHubAPI
 from ..utils.rate_limiter import RateLimiter
 from ..utils.verify_signature import verify_signature
@@ -115,6 +116,8 @@ class GitHubWebhookPlugin(Star):
                 message = await handle_pull_request_event(data, self.context)
             elif event_type == EVENT_TYPE_FORK:
                 message = await handle_fork_event(data, self.context)
+            elif event_type == "repository":
+                message = await handle_repository_event(data, self.context)
             else:
                 logger.info(f"GitHub Webhook: Event type '{event_type}' not handled")
         except Exception as e:
